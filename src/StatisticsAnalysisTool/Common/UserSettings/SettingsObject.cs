@@ -106,4 +106,5 @@ public class SettingsObject
     public string DebugConsoleFilter { get; set; }
     public bool IsOpenDebugConsoleWhenStartingTheToolChecked { get; set; } = false;
     public int NetworkDevice { get; set; } = -1;
+    public bool IsDamageMeterResetAndSnapshotBeforeCombatActive { get; set; } = false;
 }

@@ -1,4 +1,4 @@
-﻿<UserControl x:Class="StatisticsAnalysisTool.UserControls.DamageMeterControl"
+<UserControl x:Class="StatisticsAnalysisTool.UserControls.DamageMeterControl"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
@@ -73,6 +73,9 @@
                                           HorizontalContentAlignment="Left" Margin="5,2,10,0" VerticalAlignment="Top" HorizontalAlignment="Left" Width="auto"/>
                                     <CheckBox IsChecked="{Binding DamageMeterBindings.IsDamageMeterResetBeforeCombatActive}" 
                                           Content="{Binding Translation.ResetBeforeCombat, FallbackValue=RESET__BEFORE__COMBAT}" 
+                                          HorizontalContentAlignment="Left" Margin="5,2,10,0" VerticalAlignment="Top" HorizontalAlignment="Left" Width="auto"/>
+                                    <CheckBox IsChecked="{Binding DamageMeterBindings.IsDamageMeterResetAndSnapshotBeforeCombatActive}" 
+                                          Content="战斗前重置并截取简报" 
                                           HorizontalContentAlignment="Left" Margin="5,2,10,0" VerticalAlignment="Top" HorizontalAlignment="Left" Width="auto"/>
                                     <CheckBox IsChecked="{Binding DamageMeterBindings.IsSnapshotAfterMapChangeActive}" 
                                           Content="{Binding Translation.SnapshotAfterMapChange, FallbackValue=SNAPSHOT__AFTER__MAP__CHANGE}" 
