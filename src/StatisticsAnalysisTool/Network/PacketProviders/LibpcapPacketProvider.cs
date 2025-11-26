@@ -272,8 +272,6 @@ public class LibpcapPacketProvider : PacketProvider
 
         bool isPhotonPort = PhotonPorts.Udp.Contains(udp.SourcePort) || PhotonPorts.Udp.Contains(udp.DestinationPort); // 端口白名单（5055/5056/5058）
         bool looksPhoton = isPhotonPort || LooksLikePhoton(udp.Payload); // 端口或负载特征判定
-        Log.Information("UDP: {SourcePort} -> {DestinationPort}, {PayloadLength} bytes, isPhotonPort: {IsPhotonPort}, looksPhoton: {LooksPhoton}",
-            udp.SourcePort, udp.DestinationPort, udp.Payload.Length, isPhotonPort, looksPhoton);
         if (!looksPhoton || udp.Payload.Length == 0)
         {
             return;
