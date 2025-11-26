@@ -1,11 +1,11 @@
-﻿#nullable enable
+﻿#nullable enable // 启用可空引用类型分析（编译器会提示潜在的空引用问题）
 
-using BinaryFormat;
-using BinaryFormat.EthernetFrame;
-using BinaryFormat.IPv4;
-using BinaryFormat.Udp;
-using Libpcap;
-using Serilog;
+using BinaryFormat; // 二进制读取工具（用于逐层解析网络帧）
+using BinaryFormat.EthernetFrame; // 以太网（L2）帧解析模型
+using BinaryFormat.IPv4; // IPv4（L3）报文解析模型
+using BinaryFormat.Udp; // UDP（L4）报文解析模型
+using Libpcap; // Npcap/Libpcap 抓包库封装
+using Serilog; // 日志
 using StatisticsAnalysisTool.Abstractions;
 using StatisticsAnalysisTool.Common.UserSettings;
 using System;
@@ -15,8 +15,14 @@ using System.Threading;
 
 namespace StatisticsAnalysisTool.Network.PacketProviders;
 
+// LibpcapPacketProvider：基于 Npcap/Libpcap 的抓包提供者
+// 负责：
+// 1) 打开网卡设备，使用可选的 BPF 过滤器进行捕获
+// 2) 启动后台线程循环读取数据，通过 Dispatcher 分发
+// 3) 逐层解析（L2 以太网 → L3 IPv4/IPv6 → L4 UDP），识别 Photon 负载，投递给上层 IPhotonReceiver
 public class LibpcapPacketProvider : PacketProvider
 {
+<<<<<<< HEAD
     private readonly IPhotonReceiver _photonReceiver;
     private PcapDispatcher? _dispatcher;
     private CancellationTokenSource? _cts;
@@ -26,33 +32,46 @@ public class LibpcapPacketProvider : PacketProvider
     private readonly Lock _lockObj = new();
     private readonly Dictionary<Pcap, int> _pcapScores = new();
     private DateTime _lastValidPacketUtc = DateTime.MinValue;
+=======
+    private readonly IPhotonReceiver _photonReceiver; // 上层 Photon 接收器（解析后的负载交由其处理）
+    private readonly PcapDispatcher _dispatcher; // 设备调度器：统一打开设备、设置过滤器、分发捕获的 Packet
+    private CancellationTokenSource? _cts; // 取消令牌（用于优雅停止 Worker 线程）
+    private Thread? _thread; // 后台工作线程（不断调用 Dispatcher.Dispatch）
+    private volatile Pcap? _activePcap; // 当前锁定的适配器（volatile：多线程可见性，避免缓存不一致）
+    private const bool LockToFirstDevice = true; // 是否锁定到第一个出现“有效 Photon 数据”的设备，避免多设备混淆
+    private readonly Lock _lockObj = new(); // 保护适配器选取与评分的互斥锁
+    private readonly Dictionary<Pcap, int> _pcapScores = new(); // 设备评分：收到多少有效包后锁定设备
+    private DateTime _lastValidPacketUtc = DateTime.MinValue; // 最近一次收到有效 Photon 包的时间
+    private readonly Dictionary<Pcap, int> _pcapDeviceType = new();
+>>>>>>> b76af747 (feat: 增加对UU加速器路由模式的兼容)
 
-    private const int ScoreToLock = 1;
-    private static readonly TimeSpan LockIdleTimeout = TimeSpan.FromSeconds(20);
+    private const int ScoreToLock = 1; // 累积到该分数即锁定设备（默认 1，首次有效即锁定）
+    private static readonly TimeSpan LockIdleTimeout = TimeSpan.FromSeconds(20); // 超过 20s 无有效包则释放锁定设备
 
-    public override bool IsRunning => _thread is { IsAlive: true };
+    public override bool IsRunning => _thread is { IsAlive: true }; // C# 模式匹配：线程对象存在且存活即认为正在运行
 
     public LibpcapPacketProvider(IPhotonReceiver photonReceiver)
     {
-        _photonReceiver = photonReceiver ?? throw new ArgumentNullException(nameof(photonReceiver));
-        _dispatcher = new PcapDispatcher(Dispatch);
+        _photonReceiver = photonReceiver ?? throw new ArgumentNullException(nameof(photonReceiver)); // 空检查：避免上层未传递接收器
+        _dispatcher = new PcapDispatcher(Dispatch); // 将本类的 Dispatch 方法注册为回调（每次捕获都会调用）
     }
 
     public override void Start()
     {
-        if (_thread is { IsAlive: true })
+        if (_thread is { IsAlive: true }) // 已经启动则直接返回
         {
             return;
         }
 
-        _activePcap = null;
+        _activePcap = null; // 启动前清空当前锁定设备
 
         _dispatcher?.Dispose();
         _dispatcher = new PcapDispatcher(Dispatch);
 
         _cts?.Dispose();
-        _cts = new CancellationTokenSource();
+        _cts = new CancellationTokenSource(); // 创建取消令牌（Stop 时用于通知 Worker 退出）
 
+<<<<<<< HEAD
         var dispatcher = _dispatcher;
         if (dispatcher is null)
         {
@@ -61,32 +80,35 @@ public class LibpcapPacketProvider : PacketProvider
         }
 
         var devices = Pcap.ListDevices();
+=======
+        var devices = Pcap.ListDevices(); // 罗列可用网卡设备（Npcap 枚举）
+>>>>>>> b76af747 (feat: 增加对UU加速器路由模式的兼容)
         if (devices.Count == 0)
         {
             Log.Warning("Npcap: no devices found");
             return;
         }
 
-        var filter = GetEffectiveFilter();
+        var filter = GetEffectiveFilter(); // 用户配置的 BPF 过滤器（例如仅捕获 UDP 5055/5056/5058）
         bool hasFilter = !string.IsNullOrWhiteSpace(filter);
 
-        int configuredIndex = SettingsController.CurrentSettings.NetworkDevice;
+        int configuredIndex = SettingsController.CurrentSettings.NetworkDevice; // 指定的设备索引（-1 表示自动）
         int opened = 0;
         for (int i = 0; i < devices.Count; i++)
         {
             var device = devices[i];
 
-            if (configuredIndex >= 0 && i != configuredIndex)
+            if (configuredIndex >= 0 && i != configuredIndex) // 用户指定了设备索引，则跳过其它设备
             {
                 continue;
             }
 
-            if (device.Flags.HasFlag(PcapDeviceFlags.Loopback))
+            if (device.Flags.HasFlag(PcapDeviceFlags.Loopback)) // 跳过回环设备（本机回环）
             {
                 Log.Information("Npcap[ID:{Index}]: skip loopback {Name}:{Desc}", i, device.Name, device.Description);
                 continue;
             }
-            if (!device.Flags.HasFlag(PcapDeviceFlags.Up))
+            if (!device.Flags.HasFlag(PcapDeviceFlags.Up)) // 跳过未启用的设备
             {
                 Log.Information("Npcap[ID:{Index}]: skip down {Name}:{Desc}", i, device.Name, device.Description);
                 continue;
@@ -97,9 +119,17 @@ public class LibpcapPacketProvider : PacketProvider
                 Log.Information("Npcap[ID:{Index}]: opening {Name}:{Desc} (Type={Type}, Flags={Flags})",
                     i, device.Name, device.Description, device.Type, device.Flags);
 
+<<<<<<< HEAD
                 dispatcher.OpenDevice(device, pcap =>
+=======
+                _dispatcher.OpenDevice(device, pcap => // 打开设备并设置非阻塞模式（避免 Dispatch 阻塞线程）
+>>>>>>> b76af747 (feat: 增加对UU加速器路由模式的兼容)
                 {
                     pcap.NonBlocking = true;
+                    lock (_lockObj)
+                    {
+                        _pcapDeviceType[pcap] = (int)device.Type;
+                    }
                 });
 
                 if (hasFilter)
@@ -131,26 +161,38 @@ public class LibpcapPacketProvider : PacketProvider
             return;
         }
 
-        _thread = new Thread(Worker) { IsBackground = true };
+        _thread = new Thread(Worker) { IsBackground = true }; // 创建后台线程并启动 Worker 循环
         _thread.Start();
 
         Log.Information("Npcap: capture started on {Opened} device(s), filter: {Filter}", opened, hasFilter ? filter : "<none>");
     }
 
 
-    private void Dispatch(Pcap pcap, ref Packet packet)
+    private void Dispatch(Pcap pcap, ref Packet packet) // Dispatcher 回调：每个捕获的 Packet 都会经过这里
     {
         if (LockToFirstDevice)
         {
             var current = _activePcap;
             if (current is null)
             {
-                _activePcap = pcap;
+                _activePcap = pcap; // 首次有效捕获，锁定此设备
             }
             else if (!ReferenceEquals(current, pcap))
             {
-                return;
+                return; // 已锁定其他设备，忽略本设备的包
             }
+        }
+
+        int deviceType = -1;
+        lock (_lockObj)
+        {
+            _pcapDeviceType.TryGetValue(pcap, out deviceType);
+        }
+
+        if (deviceType == 53)
+        {
+            TryHandleRawIp(packet.Data, pcap);
+            return;
         }
 
         // L2 (Ethernet)
@@ -158,55 +200,49 @@ public class LibpcapPacketProvider : PacketProvider
         var eth = new L2EthernetFrameShape();
         if (!ethReader.TryReadL2EthernetFrame(ref eth))
         {
+            Log.Information("Npcap: failed to read L2 Ethernet frame");
             return;
         }
 
-        ushort etherType = (ushort) ((packet.Data[12] << 8) | packet.Data[13]);
-
+        ushort etherType = (ushort)((packet.Data[12] << 8) | packet.Data[13]);
         ReadOnlySpan<byte> l3 = eth.Payload;
-
-        if (etherType == 0x0800) // IPv4
+        if (etherType == 0x0800)
         {
             var ipReader = new BinaryFormatReader(l3);
             var ip4 = new IPv4PacketShape();
             if (!ipReader.TryReadIPv4Packet(ref ip4))
                 return;
 
-            switch ((ProtocolType) ip4.Protocol)
+            switch ((ProtocolType)ip4.Protocol)
             {
                 case ProtocolType.Udp:
                     HandleUdp(ip4.Payload, pcap);
                     return;
-
                 case ProtocolType.Tcp:
                     return;
-
                 default:
                     return;
             }
         }
-
-        if (etherType == 0x86DD) // IPv6
+        else if (etherType == 0x86DD)
         {
             if (!TryReadIPv6(l3, out byte nextHeader, out ReadOnlySpan<byte> ip6Payload))
                 return;
 
-            switch ((ProtocolType) nextHeader)
+            switch ((ProtocolType)nextHeader)
             {
                 case ProtocolType.Udp:
                     HandleUdp(ip6Payload, pcap);
                     return;
-
                 case ProtocolType.Tcp:
                     return;
-
                 default:
                     return;
             }
         }
     }
 
-    private static bool TryReadIPv6(ReadOnlySpan<byte> bytes, out byte nextHeader, out ReadOnlySpan<byte> payload)
+    private static bool TryReadIPv6(ReadOnlySpan<byte> bytes, out byte nextHeader, out ReadOnlySpan<byte> payload) // 简化的 IPv6 读取：固定 40 字节头
     {
         nextHeader = 0;
         payload = default;
@@ -225,23 +261,25 @@ public class LibpcapPacketProvider : PacketProvider
         return true;
     }
 
-    private void HandleUdp(ReadOnlySpan<byte> l4Payload, Pcap pcap)
+    private void HandleUdp(ReadOnlySpan<byte> l4Payload, Pcap pcap) // 处理 UDP：识别是否为 Photon 并投递给接收器
     {
         var udpReader = new BinaryFormatReader(l4Payload);
-        var udp = new UdpPacketShape();
+        var udp = new UdpPacketShape(); // 解析 UDP 头与负载
         if (!udpReader.TryReadUdpPacket(ref udp))
         {
             return;
         }
 
-        bool isPhotonPort = PhotonPorts.Udp.Contains(udp.SourcePort) || PhotonPorts.Udp.Contains(udp.DestinationPort);
-        bool looksPhoton = isPhotonPort || LooksLikePhoton(udp.Payload);
+        bool isPhotonPort = PhotonPorts.Udp.Contains(udp.SourcePort) || PhotonPorts.Udp.Contains(udp.DestinationPort); // 端口白名单（5055/5056/5058）
+        bool looksPhoton = isPhotonPort || LooksLikePhoton(udp.Payload); // 端口或负载特征判定
+        Log.Information("UDP: {SourcePort} -> {DestinationPort}, {PayloadLength} bytes, isPhotonPort: {IsPhotonPort}, looksPhoton: {LooksPhoton}",
+            udp.SourcePort, udp.DestinationPort, udp.Payload.Length, isPhotonPort, looksPhoton);
         if (!looksPhoton || udp.Payload.Length == 0)
         {
             return;
         }
 
-        SelectAndMaybeLockAdapter(pcap);
+        SelectAndMaybeLockAdapter(pcap); // 根据有效数据为设备打分并锁定，避免多设备同时输入导致乱序
 
         var current = _activePcap;
         if (current is not null && !ReferenceEquals(current, pcap))
@@ -249,11 +287,11 @@ public class LibpcapPacketProvider : PacketProvider
             return;
         }
 
-        _lastValidPacketUtc = DateTime.UtcNow;
+        _lastValidPacketUtc = DateTime.UtcNow; // 更新最后有效时间（用于释放锁定的判断）
 
         try
         {
-            _photonReceiver.ReceivePacket(udp.Payload);
+            _photonReceiver.ReceivePacket(udp.Payload); // 将 Photon 负载投递到上层解析器（AlbionParser）
         }
         catch (Exception ex)
         {
@@ -261,7 +299,7 @@ public class LibpcapPacketProvider : PacketProvider
         }
     }
 
-    private void SelectAndMaybeLockAdapter(Pcap pcap)
+    private void SelectAndMaybeLockAdapter(Pcap pcap) // 设备选择与锁定：优先使用有有效数据的设备，长时间无数据释放锁
     {
         lock (_lockObj)
         {
@@ -293,7 +331,7 @@ public class LibpcapPacketProvider : PacketProvider
         }
     }
 
-    private static bool LooksLikePhoton(ReadOnlySpan<byte> payload)
+    private static bool LooksLikePhoton(ReadOnlySpan<byte> payload) // 负载特征判定：首字节常见 Photon 标识（简化版）
     {
         if (payload.Length < 3)
         {
@@ -305,7 +343,55 @@ public class LibpcapPacketProvider : PacketProvider
         return b0 is 0xF1 or 0xF2 or 0xFE;
     }
 
-    private void Worker()
+    private void TryHandleRawIp(ReadOnlySpan<byte> bytes, Pcap pcap)
+    {
+        if (bytes.Length < 1)
+        {
+            return;
+        }
+
+        int version = (bytes[0] >> 4) & 0x0F;
+        if (version == 4)
+        {
+            var ipReader = new BinaryFormatReader(bytes);
+            var ip4 = new IPv4PacketShape();
+            if (!ipReader.TryReadIPv4Packet(ref ip4))
+            {
+                return;
+            }
+
+            switch ((ProtocolType)ip4.Protocol)
+            {
+                case ProtocolType.Udp:
+                    HandleUdp(ip4.Payload, pcap);
+                    return;
+                case ProtocolType.Tcp:
+                    return;
+                default:
+                    return;
+            }
+        }
+        else if (version == 6)
+        {
+            if (!TryReadIPv6(bytes, out byte nextHeader, out ReadOnlySpan<byte> ip6Payload))
+            {
+                return;
+            }
+
+            switch ((ProtocolType)nextHeader)
+            {
+                case ProtocolType.Udp:
+                    HandleUdp(ip6Payload, pcap);
+                    return;
+                case ProtocolType.Tcp:
+                    return;
+                default:
+                    return;
+            }
+        }
+    }
+
+    private void Worker() // 后台线程循环：周期性从 Dispatcher 拉取数据并分发
     {
         try
         {
@@ -320,7 +406,7 @@ public class LibpcapPacketProvider : PacketProvider
                 int dispatched;
                 try
                 {
-                    dispatched = dispatcher.Dispatch(50);
+                    dispatched = dispatcher.Dispatch(50);  // 轮询分发（最多等待 50ms），返回处理的包数量
                 }
                 catch (ObjectDisposedException)
                 {
@@ -333,7 +419,7 @@ public class LibpcapPacketProvider : PacketProvider
 
                 if (dispatched <= 0)
                 {
-                    _cts?.Token.WaitHandle.WaitOne(25);
+                    _cts?.Token.WaitHandle.WaitOne(25); // 无数据时短暂休眠，避免空转占用 CPU
                 }
             }
         }
@@ -343,7 +429,7 @@ public class LibpcapPacketProvider : PacketProvider
         }
     }
 
-    public override void Stop()
+    public override void Stop() // 停止抓包：取消令牌 → 释放设备 → 等待线程退出 → 清理状态
     {
         try
         {
@@ -361,13 +447,13 @@ public class LibpcapPacketProvider : PacketProvider
         }
     }
 
-    public static class PhotonPorts
+    public static class PhotonPorts // Photon 默认端口（Albion 使用的常见配置）
     {
         public static readonly HashSet<ushort> Udp = [5055, 5056, 5058];
         public static readonly HashSet<ushort> Tcp = [4530, 4531, 4533];
     }
 
-    private static string? GetEffectiveFilter()
+    private static string? GetEffectiveFilter() // 返回用户配置的 BPF 过滤器（为空则捕获全部）
     {
         var user = SettingsController.CurrentSettings.PacketFilter;
         return string.IsNullOrWhiteSpace(user) ? null : user;
