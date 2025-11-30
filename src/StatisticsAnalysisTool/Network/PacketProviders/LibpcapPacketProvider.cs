@@ -22,28 +22,18 @@ namespace StatisticsAnalysisTool.Network.PacketProviders;
 // 3) 逐层解析（L2 以太网 → L3 IPv4/IPv6 → L4 UDP），识别 Photon 负载，投递给上层 IPhotonReceiver
 public class LibpcapPacketProvider : PacketProvider
 {
-<<<<<<< HEAD
-    private readonly IPhotonReceiver _photonReceiver;
-    private PcapDispatcher? _dispatcher;
-    private CancellationTokenSource? _cts;
-    private Thread? _thread;
-    private volatile Pcap? _activePcap;
-    private const bool LockToFirstDevice = true;
-    private readonly Lock _lockObj = new();
-    private readonly Dictionary<Pcap, int> _pcapScores = new();
-    private DateTime _lastValidPacketUtc = DateTime.MinValue;
-=======
     private readonly IPhotonReceiver _photonReceiver; // 上层 Photon 接收器（解析后的负载交由其处理）
-    private readonly PcapDispatcher _dispatcher; // 设备调度器：统一打开设备、设置过滤器、分发捕获的 Packet
+    private PcapDispatcher? _dispatcher; // 设备调度器：统一打开设备、设置过滤器、分发捕获的 Packet
     private CancellationTokenSource? _cts; // 取消令牌（用于优雅停止 Worker 线程）
-    private Thread? _thread; // 后台工作线程（不断调用 Dispatcher.Dispatch）
-    private volatile Pcap? _activePcap; // 当前锁定的适配器（volatile：多线程可见性，避免缓存不一致）
-    private const bool LockToFirstDevice = true; // 是否锁定到第一个出现“有效 Photon 数据”的设备，避免多设备混淆
-    private readonly Lock _lockObj = new(); // 保护适配器选取与评分的互斥锁
-    private readonly Dictionary<Pcap, int> _pcapScores = new(); // 设备评分：收到多少有效包后锁定设备
-    private DateTime _lastValidPacketUtc = DateTime.MinValue; // 最近一次收到有效 Photon 包的时间
+    private Thread? _thread;  // 后台工作线程（不断调用 Dispatcher.Dispatch）
+    private volatile Pcap? _activePcap;  // 当前锁定的适配器（volatile：多线程可见性，避免缓存不一致）
+    private const bool LockToFirstDevice = true;  // 是否锁定到第一个出现“有效 Photon 数据”的设备，避免多设备混淆
+    private readonly Lock _lockObj = new();  // 保护适配器选取与评分的互斥锁
+    private readonly Dictionary<Pcap, int> _pcapScores = new();  // 设备评分：收到多少有效包后锁定设备
+    private DateTime _lastValidPacketUtc = DateTime.MinValue;  // 最近一次收到有效 Photon 包的时间
     private readonly Dictionary<Pcap, int> _pcapDeviceType = new();
->>>>>>> b76af747 (feat: 增加对UU加速器路由模式的兼容)
+
+
 
     private const int ScoreToLock = 1; // 累积到该分数即锁定设备（默认 1，首次有效即锁定）
     private static readonly TimeSpan LockIdleTimeout = TimeSpan.FromSeconds(20); // 超过 20s 无有效包则释放锁定设备
@@ -71,7 +61,6 @@ public class LibpcapPacketProvider : PacketProvider
         _cts?.Dispose();
         _cts = new CancellationTokenSource(); // 创建取消令牌（Stop 时用于通知 Worker 退出）
 
-<<<<<<< HEAD
         var dispatcher = _dispatcher;
         if (dispatcher is null)
         {
@@ -80,9 +69,6 @@ public class LibpcapPacketProvider : PacketProvider
         }
 
         var devices = Pcap.ListDevices();
-=======
-        var devices = Pcap.ListDevices(); // 罗列可用网卡设备（Npcap 枚举）
->>>>>>> b76af747 (feat: 增加对UU加速器路由模式的兼容)
         if (devices.Count == 0)
         {
             Log.Warning("Npcap: no devices found");
@@ -119,11 +105,7 @@ public class LibpcapPacketProvider : PacketProvider
                 Log.Information("Npcap[ID:{Index}]: opening {Name}:{Desc} (Type={Type}, Flags={Flags})",
                     i, device.Name, device.Description, device.Type, device.Flags);
 
-<<<<<<< HEAD
-                dispatcher.OpenDevice(device, pcap =>
-=======
-                _dispatcher.OpenDevice(device, pcap => // 打开设备并设置非阻塞模式（避免 Dispatch 阻塞线程）
->>>>>>> b76af747 (feat: 增加对UU加速器路由模式的兼容)
+                dispatcher.OpenDevice(device, pcap => // 打开设备并设置非阻塞模式（避免 Dispatch 阻塞线程）
                 {
                     pcap.NonBlocking = true;
                     lock (_lockObj)

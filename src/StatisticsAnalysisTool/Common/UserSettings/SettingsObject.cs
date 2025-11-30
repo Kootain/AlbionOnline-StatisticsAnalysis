@@ -107,4 +107,10 @@ public class SettingsObject
     public bool IsOpenDebugConsoleWhenStartingTheToolChecked { get; set; } = false;
     public int NetworkDevice { get; set; } = -1;
     public bool IsDamageMeterResetAndSnapshotBeforeCombatActive { get; set; } = false;
+    public double DamageMeterWindowOpacity { get; set; } = 0.8;
+    public double DamageMeterWindowHeight { get; set; } = 450;
+    public double DamageMeterWindowWidth { get; set; } = 650;
+    public double DamageMeterWindowLeft { get; set; } = 0;
+    public double DamageMeterWindowTop { get; set; } = 0;
+    public bool IsDamageMeterClickThrough { get; set; } = false;
 }
