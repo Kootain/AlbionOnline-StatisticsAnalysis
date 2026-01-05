@@ -354,6 +354,11 @@ public class CombatController
             return;
         }
 
+        if (_mainWindowViewModel?.DamageMeterBindings?.IsDamageMeterResetAndSnapshotBeforeCombatActive ?? false)
+        {
+            _mainWindowViewModel?.DamageMeterBindings?.GetSnapshot(true);
+        }
+
         ResetDamageMeter();
         LastPlayersHealth.Clear();
 

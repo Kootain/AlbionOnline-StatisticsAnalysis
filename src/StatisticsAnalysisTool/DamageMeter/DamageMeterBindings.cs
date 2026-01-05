@@ -1,4 +1,4 @@
-﻿using FontAwesome5;
+using FontAwesome5;
 using StatisticsAnalysisTool.Common;
 using StatisticsAnalysisTool.Common.UserSettings;
 using StatisticsAnalysisTool.Localization;
@@ -31,6 +31,7 @@ public class DamageMeterBindings : BaseViewModel, IAsyncInitialization
     private bool _isSnapshotAfterMapChangeActive;
     private GridLength _gridSplitterPosition;
     private bool _isDamageMeterResetBeforeCombatActive;
+    private bool _isDamageMeterResetAndSnapshotBeforeCombatActive;
     private bool _shortDamageMeterToClipboard;
     private bool _onlyDamageToPlayersCounts;
     public Task Initialization { get; init; }
@@ -89,6 +90,7 @@ public class DamageMeterBindings : BaseViewModel, IAsyncInitialization
         IsSnapshotAfterMapChangeActive = SettingsController.CurrentSettings.IsSnapshotAfterMapChangeActive;
         IsDamageMeterResetByMapChangeActive = SettingsController.CurrentSettings.IsDamageMeterResetByMapChangeActive;
         IsDamageMeterResetBeforeCombatActive = SettingsController.CurrentSettings.IsDamageMeterResetBeforeCombatActive;
+        IsDamageMeterResetAndSnapshotBeforeCombatActive = SettingsController.CurrentSettings.IsDamageMeterResetAndSnapshotBeforeCombatActive;
         ShortDamageMeterToClipboard = SettingsController.CurrentSettings.ShortDamageMeterToClipboard;
 
         Initialization = LoadLocalFileAsync();
@@ -219,6 +221,17 @@ public class DamageMeterBindings : BaseViewModel, IAsyncInitialization
         {
             _isDamageMeterResetBeforeCombatActive = value;
             SettingsController.CurrentSettings.IsDamageMeterResetBeforeCombatActive = _isDamageMeterResetBeforeCombatActive;
+            OnPropertyChanged();
+        }
+    }
+
+    public bool IsDamageMeterResetAndSnapshotBeforeCombatActive
+    {
+        get => _isDamageMeterResetAndSnapshotBeforeCombatActive;
+        set
+        {
+            _isDamageMeterResetAndSnapshotBeforeCombatActive = value;
+            SettingsController.CurrentSettings.IsDamageMeterResetAndSnapshotBeforeCombatActive = _isDamageMeterResetAndSnapshotBeforeCombatActive;
             OnPropertyChanged();
         }
     }
